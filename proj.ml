@@ -6,13 +6,21 @@
 
 (* questions:
     * entier = integer?
-    *
+    * batteries
  *)
+
+open Printf
 
 (* helper functions *)
 let println_string s =
-    print_string (s ^ "\n")
+    printf "%s\n%!" s (* flush to ensure proper output ordering *)
 ;;
+
+(* stores variables' values *)
+module Environment = Map.Make(Char);;
+
+exception DivZero;;
+exception InvalidVariable;;
 
 (* / helper functions *)
 
@@ -39,7 +47,7 @@ let rec show =
         | Diff (l,r) -> showop "-" l r
         | Prod (l,r) -> showop "*" l r
         | Div (l,r) -> showop "/" l r
-        | Neg e -> "(-" ^ show e
+        | Neg e -> "(-" ^ show e ^ ")"
 ;;
 
 let print_expr e = println_string (show e);;
@@ -49,4 +57,23 @@ print_expr fig2;;
 print_expr circumf_rectangle;;
 
 
+(* eval : expr -> int *)
+let rec eval env =
+    let evalop op l r = op (eval env l) (eval env r) in
+    function
+        | Int i -> i
+        | Var v -> if Environment.mem v env
+                      then Environment.find v env
+                      else raise InvalidVariable
+        | Sum (l,r) -> evalop (+) l r
+        | Diff (l,r) -> evalop (-) l r
+        | Prod (l,r) -> evalop ( * ) l r
+        | Div (l,r) -> if (eval env r) <> 0
+                        then evalop (/) l r
+                        else raise DivZero
+        | Neg e -> -(eval env e)
+;;
 
+let env1 = Environment.add 'x' 2 (Environment.add 'y' 4 (Environment.empty));;
+
+print_int (eval env1 fig1);;
