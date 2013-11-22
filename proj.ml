@@ -26,18 +26,18 @@ exception InvalidVariable;;
 
 type expr = Int of int
           | Var of char
-          | Sum of expr * expr
-          | Diff of expr * expr
-          | Prod of expr * expr
+          | Add of expr * expr
+          | Sub of expr * expr
+          | Mul of expr * expr
           | Div of expr * expr (* integer division *)
           | Neg of expr;;
 
-let fig1 = Sum (Sum (Prod (Var 'x', Int 1), Neg (Var 'y')),
-                Diff (Int 5, Int 7));;
-let fig2 = Sum (Sum (Var 'x', Var 'y'), Int 5);;
-let fig3 = Sum (Sum (Prod (Var 'x', Int 1), Neg (Diff (Int 0, Var 'y'))),
-                Diff(Int 5, Prod(Int 0, Var 'z')))
-let circumf_rectangle = Sum (Prod (Int 2, Var 'x'), Prod (Int 2, Var 'y'));;
+let fig1 = Add (Add (Mul (Var 'x', Int 1), Neg (Var 'y')),
+                Sub (Int 5, Int 7));;
+let fig2 = Add (Add (Var 'x', Var 'y'), Int 5);;
+let fig3 = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
+                Sub(Int 5, Mul(Int 0, Var 'z')))
+let circumf_rectangle = Add (Mul (Int 2, Var 'x'), Mul (Int 2, Var 'y'));;
 
 (* show : expr -> string *)
 let rec show =
@@ -45,9 +45,9 @@ let rec show =
     function
         | Int i -> string_of_int i
         | Var v -> String.make 1 v
-        | Sum (l,r) -> showop "+" l r
-        | Diff (l,r) -> showop "-" l r
-        | Prod (l,r) -> showop "*" l r
+        | Add (l,r) -> showop "+" l r
+        | Sub (l,r) -> showop "-" l r
+        | Mul (l,r) -> showop "*" l r
         | Div (l,r) -> showop "/" l r
         | Neg e -> "(-" ^ show e ^ ")"
 ;;
@@ -69,9 +69,9 @@ let rec eval env =
         | Var v -> if Environment.mem v env
                       then Environment.find v env
                       else raise InvalidVariable
-        | Sum (l,r) -> evalop (+) l r
-        | Diff (l,r) -> evalop (-) l r
-        | Prod (l,r) -> evalop ( * ) l r
+        | Add (l,r) -> evalop (+) l r
+        | Sub (l,r) -> evalop (-) l r
+        | Mul (l,r) -> evalop ( * ) l r
         | Div (l,r) -> if (eval env r) <> 0
                         then evalop (/) l r
                         else raise DivZero
@@ -86,26 +86,26 @@ print_string "\n\n";;
 (* simplify1 : expr -> expr *)
 let rec simplify1 = function
     (* neutral elements *)
-    | Sum (Int 0, r) -> simplify1 r
-    | Sum (l, Int 0) -> simplify1 l
-    | Prod (Int 1, r) -> simplify1 r
-    | Prod (l, Int 1) -> simplify1 l
-    | Diff (l, Int 0) -> simplify1 l
-    | Diff (Int 0, r) -> simplify1 (Neg r)
+    | Add (Int 0, r) -> simplify1 r
+    | Add (l, Int 0) -> simplify1 l
+    | Mul (Int 1, r) -> simplify1 r
+    | Mul (l, Int 1) -> simplify1 l
+    | Sub (l, Int 0) -> simplify1 l
+    | Sub (Int 0, r) -> simplify1 (Neg r)
     (* absorbing elements *)
-    | Prod (Int 0, _) -> Int 0
-    | Prod (_, Int 0) -> Int 0
+    | Mul (Int 0, _) -> Int 0
+    | Mul (_, Int 0) -> Int 0
     | Div (Int 0, _) -> Int 0
     (* negation elimination *)
     | Neg (Neg a) -> simplify1 a
-    | Sum (l, Neg r) -> simplify1 (Diff (l, r))
-    | Diff (l, Neg r) -> simplify1 (Sum (l, r))
+    | Add (l, Neg r) -> simplify1 (Sub (l, r))
+    | Sub (l, Neg r) -> simplify1 (Add (l, r))
     (* defaults *)
     | Int i -> Int i
     | Var v -> Var v
-    | Sum (l, r) -> Sum (simplify1 l, simplify1 r)
-    | Prod (l, r) -> Prod (simplify1 l, simplify1 r)
-    | Diff (l, r) -> Diff (simplify1 l, simplify1 r)
+    | Add (l, r) -> Add (simplify1 l, simplify1 r)
+    | Mul (l, r) -> Mul (simplify1 l, simplify1 r)
+    | Sub (l, r) -> Sub (simplify1 l, simplify1 r)
     | Div (l, r) -> Div (simplify1 l, simplify1 r)
     | Neg e -> Neg (simplify1 e)
 ;;
@@ -133,16 +133,16 @@ let rec simplify e =
 print_expr fig3 ~n:"Fig. 3 (original)";;
 print_expr (simplify fig3) ~n:"Fig. 3 (simplified)";;
 
-let test = Neg (Diff (Int 0, Int 3));;
+let test = Neg (Sub (Int 0, Int 3));;
 print_expr (simplify1 test);;
 print_expr (simplify test);;
-let test = Prod (Int 3, Sum (Int 0, Int 0));;
+let test = Mul (Int 3, Add (Int 0, Int 0));;
 print_expr (simplify1 test);;
 print_expr (simplify test);;
 
-let test = Sum (Prod (Int 0, Int 5), (Neg (Int 4)));;
+let test = Add (Mul (Int 0, Int 5), (Neg (Int 4)));;
 print_expr (simplify test);;
-let test = Sum (Prod (Int 1, Int 5), (Neg (Int 4)));;
+let test = Add (Mul (Int 1, Int 5), (Neg (Int 4)));;
 print_expr (simplify test);;
-let test = Sum (Prod (Int 2, Int 5), (Neg (Int 4)));;
+let test = Add (Mul (Int 2, Int 5), (Neg (Int 4)));;
 print_expr (simplify test);;
