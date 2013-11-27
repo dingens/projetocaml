@@ -12,15 +12,22 @@
 open Printf
 
 (* helper functions *)
+module Environment = Map.Make(Char);;
+module CSet = Set.Make(Char);;
+
+exception DivZero;;
+exception InvalidVariable;;
+exception EmptyList;;
+
 let println_string s =
     printf "%s\n%!" s (* flush to ensure proper output ordering *)
 ;;
 
-(* stores variables' values *)
-module Environment = Map.Make(Char);;
+let print_cset s = println_string (String.concat " " (List.map (String.make 1)
+(CSet.elements s)));;
 
-exception DivZero;;
-exception InvalidVariable;;
+let print_environment e = Environment.iter (printf "%c=%d ") e;;
+let println_environment e = print_environment e; print_newline ();;
 
 (* / helper functions *)
 
@@ -38,6 +45,7 @@ let fig2 = Add (Add (Var 'x', Var 'y'), Int 5);;
 let fig3 = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
                 Sub(Int 5, Mul(Int 0, Var 'z')))
 let circumf_rectangle = Add (Mul (Int 2, Var 'x'), Mul (Int 2, Var 'y'));;
+let num_fingers = Mul (Int 2, Int 5);;
 
 (* show : expr -> string *)
 let rec show =
@@ -132,6 +140,7 @@ let rec simplify e =
 
 print_expr fig3 ~n:"Fig. 3 (original)";;
 print_expr (simplify fig3) ~n:"Fig. 3 (simplified)";;
+print_newline ();;
 
 let test = Neg (Sub (Int 0, Int 3));;
 print_expr (simplify1 test);;
@@ -146,3 +155,64 @@ let test = Add (Mul (Int 1, Int 5), (Neg (Int 4)));;
 print_expr (simplify test);;
 let test = Add (Mul (Int 2, Int 5), (Neg (Int 4)));;
 print_expr (simplify test);;
+
+
+(* find_variables : expr -> CSet (* set of chars *) *)
+let rec find_variables = function
+    | Int _ -> CSet.empty
+    | Var v -> CSet.singleton v
+    | Add (l, r) -> CSet.union (find_variables l) (find_variables r)
+    | Sub (l, r) -> CSet.union (find_variables l) (find_variables r)
+    | Mul (l, r) -> CSet.union (find_variables l) (find_variables r)
+    | Div (l, r) -> CSet.union (find_variables l) (find_variables r)
+    | Neg e -> find_variables e
+;;
+
+print_newline ();;
+
+(* generate_environments : CSet -> int Environment.t list *)
+let generate_environments vars =
+    (* generate_environments_ : char list -> int Environment.t list *)
+    let rec generate_environments_ =
+        (* addv : char -> int Environment.t -> int Environment.t list *)
+        let addv v env = [Environment.add v 0 env; Environment.add v 1 env] in
+        function
+            | [] -> [Environment.empty]
+            | v :: vs ->
+                List.concat (List.map (addv v) (generate_environments_ vs))
+    in
+    generate_environments_ (CSet.elements vars)
+;;
+List.iter println_environment (generate_environments (find_variables fig1));;
+
+(* evaluate_environments : int Environment.t list -> expr -> (int Environment.t, int) list*)
+let evaluate_environments envs expr =
+    let f env rest = ((env, eval env expr) :: rest) in
+    List.fold_right f envs []
+;;
+
+let maximize expr =
+    let rec max2 (env, res) (env', res') =
+        if res > res' then (env, res) else (env', res')
+    in
+    let rec maximize' envs = match envs with
+        | [] -> maximize' [Environment.empty]
+        | [e] -> (e, eval e expr)
+        | e::es -> max2 (e, eval e expr) (maximize' es)
+    in
+    maximize' (generate_environments (find_variables expr))
+;;
+
+let print_maximize expr =
+    let (env, res) = maximize expr in
+    print_string "maximization of ";
+    print_expr expr;
+    print_environment env;
+    printf "= %d\n" res
+;;
+
+print_newline ();;
+print_maximize fig1;;
+print_maximize fig2;;
+print_maximize fig3;;
+print_maximize num_fingers;;
