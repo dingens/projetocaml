@@ -26,7 +26,10 @@ let println_string s =
 let print_cset s = println_string (String.concat " " (List.map (String.make 1)
 (CSet.elements s)));;
 
-let print_environment e = Environment.iter (printf "%c=%d ") e;;
+let print_environment e =
+    if Environment.is_empty e
+        then printf "{} "
+        else Environment.iter (printf "%c=%d ") e;;
 let println_environment e = print_environment e; print_newline ();;
 
 (* / helper functions *)
@@ -40,12 +43,15 @@ type expr = Int of int
           | Neg of expr;;
 
 let fig1 = Add (Add (Mul (Var 'x', Int 1), Neg (Var 'y')),
-                Sub (Int 5, Int 7));;
-let fig2 = Add (Add (Var 'x', Var 'y'), Int 5);;
+                Sub (Int 5, Int 7))
+let fig2 = Add (Add (Var 'x', Var 'y'), Int 5)
 let fig3 = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
                 Sub(Int 5, Mul(Int 0, Var 'z')))
-let circumf_rectangle = Add (Mul (Int 2, Var 'x'), Mul (Int 2, Var 'y'));;
-let num_fingers = Mul (Int 2, Int 5);;
+let fig4a = Add (Var 'x', Int 3)
+let fig4b = Mul (Add (Var 'x', Int 3), Var 'y')
+let circumf_rectangle = Add (Mul (Int 2, Var 'x'), Mul (Int 2, Var 'y'))
+let num_fingers = Mul (Int 2, Int 5)
+let zero = Add (Int 1, Neg (Int 1))
 
 (* show : expr -> string *)
 let rec show =
@@ -140,6 +146,7 @@ let rec simplify e =
 
 print_expr fig3 ~n:"Fig. 3 (original)";;
 print_expr (simplify fig3) ~n:"Fig. 3 (simplified)";;
+print_expr (simplify zero) ~n:"zero (simplified)";;
 print_newline ();;
 
 let test = Neg (Sub (Int 0, Int 3));;
@@ -191,11 +198,13 @@ let evaluate_environments envs expr =
     List.fold_right f envs []
 ;;
 
+(* maximize : expr -> int Environment.t * int *)
 let maximize expr =
     let rec max2 (env, res) (env', res') =
         if res > res' then (env, res) else (env', res')
     in
     let rec maximize' envs = match envs with
+          (* if expr has no variables, the empty environment is the maximum *)
         | [] -> maximize' [Environment.empty]
         | [e] -> (e, eval e expr)
         | e::es -> max2 (e, eval e expr) (maximize' es)
@@ -205,8 +214,7 @@ let maximize expr =
 
 let print_maximize expr =
     let (env, res) = maximize expr in
-    print_string "maximization of ";
-    print_expr expr;
+    printf "null environment of %s:  " (show expr);
     print_environment env;
     printf "= %d\n" res
 ;;
@@ -215,4 +223,33 @@ print_newline ();;
 print_maximize fig1;;
 print_maximize fig2;;
 print_maximize fig3;;
+print_maximize fig4a;;
+print_maximize fig4b;;
 print_maximize num_fingers;;
+
+(* nullify : expr -> int Environment.t option *)
+let nullify expr =
+    let rec nullify' envs = match envs with
+          (* if expr has no variables, we see if is zero by itself *)
+        | [] -> nullify' [Environment.empty]
+        | [e] -> if eval e expr = 0 then Some e else None
+        | e::es -> if eval e expr = 0 then Some e else nullify' es
+    in
+    nullify' (generate_environments (find_variables expr))
+;;
+
+let print_nullify expr =
+    printf "null environment of %s:  " (show expr);
+    match nullify expr with
+        | Some env -> print_environment env; print_newline ();
+        | None -> printf "none\n"
+;;
+
+print_newline ();;
+print_nullify fig1;;
+print_nullify fig2;;
+print_nullify fig3;;
+print_nullify fig4a;;
+print_nullify fig4b;;
+print_nullify zero;;
+print_nullify num_fingers;;
