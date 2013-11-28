@@ -48,6 +48,8 @@ let fig1 = Add (Add (Mul (Var 'x', Int 1), Neg (Var 'y')),
 let fig2 = Add (Add (Var 'x', Var 'y'), Int 5)
 let fig3 = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
                 Sub(Int 5, Mul(Int 0, Var 'z')))
+let fig3' = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
+                 Sub(Mul(Int 0, Var 'z'), Int 5))
 let fig4a = Add (Var 'x', Int 3)
 let fig4b = Mul (Add (Var 'x', Int 3), Var 'y')
 let fig5 = Add (Add (Mul (Var 'a', Int 1), Neg (Sub (Int 0, Var 'a'))),
@@ -100,63 +102,75 @@ let env1 = Environment.add 'x' 2 (Environment.add 'y' 4 (Environment.empty));;
 print_int (eval env1 fig1);;
 print_string "\n\n";;
 
-(* simplify1 : expr -> expr *)
-let rec simplify1 = function
+
+(* _height : expr -> int *)
+let rec height = function
+    | Int _ -> 0
+    | Var _ -> 0
+    | Add (l, r) -> 1 + max (height l) (height r)
+    | Sub (l, r) -> 1 + max (height l) (height r)
+    | Mul (l, r) -> 1 + max (height l) (height r)
+    | Div (l, r) -> 1 + max (height l) (height r)
+    | Neg e -> 1 + (height e)
+;;
+
+(* we need to force simplification to be made from bottom to top, because some
+ * simplification opportunities only appear after some simplification has been
+ * done downwards the calculation tree
+ *)
+
+(* simplify_ : int -> expr -> expr *)
+let rec simplify_level n expr =
+(* only simplify expressions at a certain depth *)
+    let simpl = simplify_level (n-1) in
+    match (n, expr) with
     (* neutral elements *)
-    | Add (Int 0, r) -> simplify1 r
-    | Add (l, Int 0) -> simplify1 l
-    | Mul (Int 1, r) -> simplify1 r
-    | Mul (l, Int 1) -> simplify1 l
-    | Sub (l, Int 0) -> simplify1 l
-    | Sub (Int 0, r) -> simplify1 (Neg r)
+    | (0, Add (Int 0, r)) -> simpl r
+    | (0, Add (l, Int 0)) -> simpl l
+    | (0, Mul (Int 1, r)) -> simpl r
+    | (0, Mul (l, Int 1)) -> simpl l
+    | (0, Sub (l, Int 0)) -> simpl l
+    | (0, Sub (Int 0, r)) -> simpl (Neg r)
     (* absorbing elements *)
-    | Mul (Int 0, _) -> Int 0
-    | Mul (_, Int 0) -> Int 0
-    | Div (Int 0, _) -> Int 0
+    | (0, Mul (Int 0, _)) -> Int 0
+    | (0, Mul (_, Int 0)) -> Int 0
+    | (0, Div (Int 0, _)) -> Int 0
     (* negation elimination *)
-    | Neg (Neg a) -> simplify1 a
-    | Add (l, Neg r) -> simplify1 (Sub (l, r))
-    | Sub (l, Neg r) -> simplify1 (Add (l, r))
+    | (0, Neg (Neg a)) -> simpl a
+    | (0, Add (l, Neg r)) -> simpl (Sub (l, r))
+    | (0, Sub (l, Neg r)) -> simpl (Add (l, r))
     (* defaults *)
-    | Int i -> Int i
-    | Var v -> Var v
-    | Add (l, r) -> Add (simplify1 l, simplify1 r)
-    | Mul (l, r) -> Mul (simplify1 l, simplify1 r)
-    | Sub (l, r) -> Sub (simplify1 l, simplify1 r)
-    | Div (l, r) -> Div (simplify1 l, simplify1 r)
-    | Neg e -> Neg (simplify1 e)
+    | (_, Int i) -> Int i
+    | (_, Var v) -> Var v
+    | (_, Add (l, r)) -> Add (simpl l, simpl r)
+    | (_, Mul (l, r)) -> Mul (simpl l, simpl r)
+    | (_, Sub (l, r)) -> Sub (simpl l, simpl r)
+    | (_, Div (l, r)) -> Div (simpl l, simpl r)
+    | (_, Neg e) -> Neg (simpl e)
 ;;
 (* I don't detect division by zero, because I consider it more beautiful
  * when such runtime errors appear only in one place. This way simplify always
  * succeeds.
  *)
 
-(* Because it is "too late" for simplification opportunities that only appear
- * after we have changed something "downwards" the calculation tree, we have to
- * do this simplification process several times until the expression doesn't
- * change anymore.
- *
- * Possible optimisation: use flags to mark changes so we don't have to recheck
- * all subtrees in every round. #TODO
- * Or: Proceed from bottom to top. That way it should be doable in one run.
-*)
-
 (* simplify : expr -> expr *)
-let rec simplify e =
-    let e' = simplify1 e in
-    if e = e' then e else simplify e'
+let simplify e =
+    let rec simplify' e = function
+        | -1 -> e
+        | n -> simplify' (simplify_level n e) (n-1)
+    in
+    simplify' e (height e)
 ;;
 
 print_expr fig3 ~n:"Fig. 3 (original)";;
 print_expr (simplify fig3) ~n:"Fig. 3 (simplified)";;
-print_expr (simplify zero) ~n:"zero (simplified)";;
+print_expr fig3' ~n:"Fig. 3' (original)";;
+print_expr (simplify fig3') ~n:"Fig. 3' (simplified)";;
 print_newline ();;
 
 let test = Neg (Sub (Int 0, Int 3));;
-print_expr (simplify1 test);;
 print_expr (simplify test);;
 let test = Mul (Int 3, Add (Int 0, Int 0));;
-print_expr (simplify1 test);;
 print_expr (simplify test);;
 
 let test = Add (Mul (Int 0, Int 5), (Neg (Int 4)));;
