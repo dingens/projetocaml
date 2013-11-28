@@ -7,6 +7,7 @@
 (* questions:
     * entier = integer?
     * batteries
+    * 2.5.2 sans générer tous les envs?
  *)
 
 open Printf
@@ -49,6 +50,8 @@ let fig3 = Add (Add (Mul (Var 'x', Int 1), Neg (Sub (Int 0, Var 'y'))),
                 Sub(Int 5, Mul(Int 0, Var 'z')))
 let fig4a = Add (Var 'x', Int 3)
 let fig4b = Mul (Add (Var 'x', Int 3), Var 'y')
+let fig5 = Add (Add (Mul (Var 'a', Int 1), Neg (Sub (Int 0, Var 'a'))),
+                Sub (Int 5, Mul (Int 0, Var 'b')))
 let circumf_rectangle = Add (Mul (Int 2, Var 'x'), Mul (Int 2, Var 'y'))
 let num_fingers = Mul (Int 2, Int 5)
 let zero = Add (Int 1, Neg (Int 1))
@@ -253,3 +256,46 @@ print_nullify fig4a;;
 print_nullify fig4b;;
 print_nullify zero;;
 print_nullify num_fingers;;
+
+
+let rec apply f expr = match expr with
+    | Int _ -> f expr
+    | Var _ -> f expr
+    | Add (l, r) -> f (Add (apply f l, apply f r))
+    | Sub (l, r) -> f (Sub (apply f l, apply f r))
+    | Mul (l, r) -> f (Mul (apply f l, apply f r))
+    | Div (l, r) -> f (Div (apply f l, apply f r))
+    | Neg e -> f (Neg (apply f e))
+;;
+
+let var2code expr = match expr with
+    | Var v -> Int (Char.code v)
+    | _ -> expr
+;;
+
+let var2exp var exp expr = match expr with
+    | Var v -> if v = var then exp else expr
+    | _ -> expr
+;;
+
+let exch_addmul expr = match expr with
+    | Add (l, r) -> Mul (l, r)
+    | Mul (l, r) -> Add (l, r)
+    | _ -> expr
+;;
+
+let mirror expr = match expr with
+    | Add (l, r) -> Add (r, l)
+    | Sub (l, r) -> Sub (r, l)
+    | Mul (l, r) -> Mul (r, l)
+    | Div (l, r) -> Div (r, l)
+    | _ -> expr
+;;
+
+print_newline ();;
+print_expr ~n:"Fig. 5" fig5;;
+print_expr ~n:"Fig. 5, var2code" (apply var2code fig5);;
+let exp = Add (Var 'c', Int 3) in
+print_expr ~n:"Fig. 5, a->c+3" (apply (var2exp 'a' exp) fig5);;
+print_expr ~n:"Fig. 5, +->* *->+" (apply exch_addmul fig5);;
+print_expr ~n:"Fig. 5, mirror" (apply mirror fig5);;
